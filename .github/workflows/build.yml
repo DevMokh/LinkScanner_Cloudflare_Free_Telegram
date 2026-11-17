@@ -1,0 +1,72 @@
+name: LinkScanner Android Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Analyze, test, and build APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform scaffolding
+        run: flutter create --platforms=android --org com.linkscanner --project-name link_scanner .
+
+      - name: Apply app-specific Android configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp tool/android/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          find android/app/src/main/kotlin -name 'MainActivity.kt' -delete
+          mkdir -p android/app/src/main/kotlin/com/linkscanner/app
+          cp tool/android/MainActivity.kt android/app/src/main/kotlin/com/linkscanner/app/MainActivity.kt
+          sed -i 's/^    namespace = .*/    namespace = "com.linkscanner.app"/' android/app/build.gradle.kts
+          sed -i 's/^        applicationId = .*/        applicationId = "com.linkscanner.app"/' android/app/build.gradle.kts
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build release APK
+        env:
+          NOTIFICATION_ENDPOINT: ${{ vars.NOTIFICATION_ENDPOINT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${NOTIFICATION_ENDPOINT:-}" ]]; then
+            flutter build apk --release --dart-define=NOTIFICATION_ENDPOINT="${NOTIFICATION_ENDPOINT}"
+          else
+            flutter build apk --release
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinkScanner-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
