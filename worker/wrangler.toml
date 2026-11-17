@@ -1,0 +1,17 @@
+name = "linkscanner-notifier"
+main = "src/index.js"
+compatibility_date = "2026-11-17"
+workers_dev = true
+
+[observability]
+enabled = true
+
+# Approximate rate limit per source IP, in each Cloudflare location.
+# Cloudflare documents that this API is not a strict global limit.
+[[ratelimits]]
+name = "NOTIFY_RATE_LIMITER"
+namespace_id = "2026111701"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60
